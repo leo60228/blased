@@ -1,7 +1,4 @@
-#![feature(backtrace)]
-
 use serde::Deserialize;
-use std::backtrace::Backtrace;
 use std::result::Result as StdResult;
 use surf::Client;
 use thiserror::Error;
@@ -9,30 +6,22 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("http error: {surf}")]
-    Http {
-        surf: surf::Error,
-        backtrace: Backtrace,
-    },
+    Http { surf: surf::Error },
     #[error("JSON error: {source}")]
     Json {
         #[from]
         source: serde_json::Error,
-        backtrace: Backtrace,
     },
     #[error("url encode error: {source}")]
     UrlEncode {
         #[from]
         source: serde_urlencoded::ser::Error,
-        backtrace: Backtrace,
     },
 }
 
 impl From<surf::Error> for Error {
     fn from(surf: surf::Error) -> Self {
-        Self::Http {
-            surf,
-            backtrace: Backtrace::capture(),
-        }
+        Self::Http { surf }
     }
 }
 
@@ -69,18 +58,79 @@ pub struct Team {
     pub championships: usize,
 }
 
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Player {
+    pub id: String,
+    pub anticapitalism: f64,
+    pub base_thirst: f64,
+    pub buoyancy: f64,
+    pub chasiness: f64,
+    pub coldness: f64,
+    pub continuation: f64,
+    pub divinity: f64,
+    pub ground_friction: f64,
+    pub indulgence: f64,
+    pub laserlikeness: f64,
+    pub martyrdom: f64,
+    pub moxie: f64,
+    pub musclitude: f64,
+    pub name: String,
+    pub bat: Option<String>,
+    pub omniscience: f64,
+    pub overpowerment: f64,
+    pub patheticism: f64,
+    pub ruthlessness: f64,
+    pub shakespearianism: f64,
+    pub suppression: f64,
+    pub tenaciousness: f64,
+    pub thwackability: f64,
+    pub tragicness: f64,
+    pub unthwackability: f64,
+    pub watchfulness: f64,
+    pub pressurization: f64,
+    pub total_fingers: usize,
+    pub soul: usize,
+    pub deceased: bool,
+    pub peanut_allergy: bool,
+    pub cinnamon: f64,
+    pub fate: usize,
+    pub armor: Option<String>,
+    pub ritual: Option<String>,
+    pub coffee: Option<usize>,
+    pub blood: Option<usize>,
+}
+
 impl BlaseballClient {
     pub fn new() -> Self {
         let client = Client::new().with(surf::middleware::Redirect::default());
         Self { client }
     }
 
-    pub async fn get_team(&self, team: &str) -> Result<Team> {
+    pub async fn team(&self, team: &str) -> Result<Team> {
         let mut req = self
             .client
             .get("https://blaseball.com/database/team")
             .build();
         req.set_query(&[("id", team)])?;
+        Ok(self.client.send(req).await?.body_json().await?)
+    }
+
+    pub async fn all_teams(&self) -> Result<Vec<Team>> {
+        Ok(self
+            .client
+            .get("https://blaseball.com/database/allTeams")
+            .await?
+            .body_json()
+            .await?)
+    }
+
+    pub async fn players(&self, players: &[&str]) -> Result<Vec<Player>> {
+        let mut req = self
+            .client
+            .get("https://blaseball.com/database/players")
+            .build();
+        req.set_query(&[("ids", players.join(","))])?;
         Ok(self.client.send(req).await?.body_json().await?)
     }
 }
