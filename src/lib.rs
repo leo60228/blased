@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::f64::consts::PI;
 use std::result::Result as StdResult;
 use surf::Client;
 use thiserror::Error;
@@ -40,7 +41,9 @@ pub struct Team {
     pub rotation: [String; 5],
     pub bullpen: [String; 8],
     pub bench: [String; 3],
+    #[serde(rename = "weekAttr")]
     pub season_attributes: Vec<String>,
+    #[serde(rename = "gameAttr")]
     pub permanent_attributes: Vec<String>,
     pub full_name: String,
     pub location: String,
@@ -99,6 +102,83 @@ pub struct Player {
     pub ritual: Option<String>,
     pub coffee: Option<usize>,
     pub blood: Option<usize>,
+}
+
+pub enum Score {
+    Batting,
+    Pitching,
+    Defense,
+    Baserunning,
+    Vibes { day: usize },
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+pub fn round_to_even(x: f64) -> f64 {
+    use std::arch::x86_64::*;
+
+    let x_vec = unsafe { _mm_set1_pd(x) }; // SAFETY: _mm_set1_pd can never violate memory safety
+    let y_vec = unsafe { _mm_round_pd(x_vec, _MM_FROUND_TO_NEAREST_INT) }; // SAFETY: valid rounding mode is provided
+
+    unsafe {
+        std::mem::transmute_copy(&y_vec) // SAFETY: _mm128d is larger than f64, and the first 8 bytes of _mm128d are always a valid f64
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+pub fn round_to_even(x: f64) -> f64 {
+    // inefficient fallback algorithm from CPython
+    let rounded = x.round();
+    if (x - rounded).abs() == 0.5 {
+        2.0 * (x / 2.0).round()
+    } else {
+        rounded
+    }
+}
+
+impl Player {
+    pub fn score(&self, cat: Score) -> f64 {
+        match cat {
+            Score::Batting => {
+                (1.0 - self.tragicness).powf(0.01)
+                    * (1.0 - self.patheticism).powf(0.05)
+                    * (self.thwackability * self.divinity).powf(0.35)
+                    * (self.moxie * self.musclitude).powf(0.075)
+                    * self.martyrdom.powf(0.02)
+            }
+            Score::Pitching => {
+                self.unthwackability.powf(0.5)
+                    * self.ruthlessness.powf(0.4)
+                    * self.overpowerment.powf(0.15)
+                    * self.shakespearianism.powf(0.1)
+                    * self.coldness.powf(0.025)
+            }
+            Score::Defense => {
+                (self.omniscience * self.tenaciousness).powf(0.2)
+                    * (self.watchfulness * self.anticapitalism * self.chasiness).powf(0.1)
+            }
+            Score::Baserunning => {
+                self.laserlikeness.powf(0.5)
+                    * (self.base_thirst
+                        * self.continuation
+                        * self.ground_friction
+                        * self.indulgence)
+                        .powf(0.1)
+            }
+            Score::Vibes { day } => {
+                0.5 * round_to_even(dbg!(
+                    (self.pressurization + self.cinnamon)
+                        * ((PI * day as f64) / (5.0 * self.buoyancy + 3.0)).cos()
+                        - self.pressurization
+                        + self.cinnamon,
+                ))
+            }
+        }
+    }
+
+    pub fn rating(&self, cat: Score) -> f64 {
+        0.5 * round_to_even(10.0 * self.score(cat))
+    }
 }
 
 impl BlaseballClient {
